@@ -4,9 +4,9 @@ Put a dot in the centre of every square of an n-by-k rectangle. Each side shared
 
 **Theorem.** For all n, k ≥ 1,
 
-$$
+```math
 T(n,k)=4^{(n-1)(k-1)}\prod_{1\le i<n/2}\ \prod_{1\le j<k/2}\Bigl(1-\cos^2\frac{i\pi}{n}\,\cos^2\frac{j\pi}{k}\Bigr).
-$$
+```
 
 The entry lists six conjectures, checked there for k ≤ 22 or n + k ≤ 17. All six follow.
 
@@ -14,10 +14,10 @@ The entry lists six conjectures, checked there for k ≤ 22 or n + k ≤ 17. All
 
 **Corollary 2.** Fix n and write $s_i=\sin(i\pi/n)$. Then
 
-$$
+```math
 T(n,k)=4^{(k-1)[n\ \mathrm{even}]}\prod_{1\le i<n/2}u_i(k),\qquad
 u_i(k)=\frac{(8+8s_i)^k-(8-8s_i)^k}{16\,s_i}.
-$$
+```
 
 Each $u_i$ satisfies $u_i(k)=16u_i(k-1)-64\cos^2(i\pi/n)\,u_i(k-2)$ with $u_i(0)=0$, $u_i(1)=1$. So row n satisfies a linear recurrence of order $2^{\lfloor (n-1)/2\rfloor}$ whose characteristic roots are the products $4^{[n\ \mathrm{even}]}\prod_i(8\pm 8s_i)$. Explicitly:
 
@@ -31,7 +31,7 @@ Each $u_i$ satisfies $u_i(k)=16u_i(k-1)-64\cos^2(i\pi/n)\,u_i(k-2)$ with $u_i(0)
 
 For n ≥ 3, with the convention T(n,0) = 0, each recurrence holds as soon as all its indices are non-negative, which is a slightly larger range than the entry conjectures. For n = 2 the recurrence T(2,k) = 4T(2,k−1) holds for k ≥ 2, starting from T(2,1) = 1.
 
-*Derivation of Corollary 2 from the theorem.* For $c=\cos(i\pi/n)\ne0$, pairing j with k − j gives $\prod_{1\le j<k/2}(1-c^2\cos^2(j\pi/k))=\prod_{j=1}^{k-1}(1-c\cos(j\pi/k))=(c/2)^{k-1}U_{k-1}(1/c)$, where U is the Chebyshev polynomial of the second kind. Multiplying by $16^{k-1}$ gives $u_i(k)=(8c)^{k-1}U_{k-1}(1/c)$, and the three-term recurrence of U gives the recurrence and the closed form of $u_i$. For n = 5 the two sequences have $64\cos^2$ equal to $8(3\pm\sqrt5)$, with sum 48 and product 256. The product of two such sequences has characteristic polynomial $x^4-256x^3+(256\cdot48-2\cdot256)x^2-256\cdot256\,x+256^2$. For n = 6 the values are 48 and 16, and the extra factor 4^(k−1) rescales the roots by 4.
+*Derivation of Corollary 2 from the theorem.* For $c=\cos(i\pi/n)\ne0$, pairing j with k − j gives $\prod_{1\le j\lt k/2}(1-c^2\cos^2(j\pi/k))=\prod_{j=1}^{k-1}(1-c\cos(j\pi/k))=(c/2)^{k-1}U_{k-1}(1/c)$, where U is the Chebyshev polynomial of the second kind. Multiplying by $16^{k-1}$ gives $u_i(k)=(8c)^{k-1}U_{k-1}(1/c)$, and the three-term recurrence of U gives the recurrence and the closed form of $u_i$. For n = 5 the two sequences have $64\cos^2$ equal to $8(3\pm\sqrt5)$, with sum 48 and product 256. The product of two such sequences has characteristic polynomial $x^4-256x^3+(256\cdot48-2\cdot256)x^2-256\cdot256\,x+256^2$. For n = 6 the values are 48 and 16, and the extra factor 4^(k−1) rescales the roots by 4.
 
 ## Proof of the theorem
 
@@ -51,9 +51,9 @@ Orient horizontal edges east and vertical edges north. Define a skew-symmetric m
 
 **Lemma.** The determinant of the block matrix
 
-$$
+```math
 N_S=\begin{pmatrix}\Omega_S & D_S^{\mathsf T}\\ -D_S & 0\end{pmatrix}
-$$
+```
 
 is 1 if the mirror curve is a single closed path, and 0 otherwise.
 
@@ -67,9 +67,9 @@ The accompanying script tests the Lemma against direct ray tracing for every edg
 
 By the Lemma, T(n,k) is the sum of det N_S over all S ⊆ E. A determinant is linear in each diagonal entry, so adding 1 to the diagonal entries indexed by E sums the principal minors over all subsets S:
 
-$$
+```math
 T(n,k)=\det\begin{pmatrix}I+\Omega & D^{\mathsf T}\\ -D & 0\end{pmatrix}=\det\bigl(K^{\mathsf T}(I+\Omega)K\bigr).
-$$
+```
 
 The second equality is the same change of basis as in the Lemma, now for the whole grid. Here K is the E-by-F matrix whose columns are the counterclockwise boundaries of the unit faces. They form a basis of the cycle lattice of a plane graph.
 
@@ -87,21 +87,21 @@ Therefore M = Kᵀ(I+Ω)K has 4 on the diagonal, −2 from every even face to it
 
 B exchanges the two colour classes. Eliminating the even faces gives
 
-$$
+```math
 \det(2I-B)=2^{\,e-o}\det(4I-A_d^{\rm odd}),
-$$
+```
 
 where e and o count the even and odd faces. Indeed, a horizontal step followed by a vertical step leads from an odd face to a diagonal neighbour, each diagonal neighbour is reached exactly once, and so the product of the two blocks of B is the diagonal adjacency matrix restricted to the odd faces. Eliminating the odd faces instead gives $2^{\,o-e}\det(4I-A_d^{\rm even})$. Multiplying the two expressions,
 
-$$
+```math
 \det(2I-B)^2=\det(4I-A_d),
-$$
+```
 
 with A_d the diagonal adjacency matrix of the whole array of faces. This matrix is the Kronecker product of the adjacency matrices of the paths with n−1 and k−1 vertices, so its eigenvalues are 4cos(iπ/n)cos(jπ/k) for 1 ≤ i ≤ n−1 and 1 ≤ j ≤ k−1. All of them are smaller than 4 in absolute value, so the determinants are positive and
 
-$$
+```math
 T(n,k)=2^{F}\det(2I-B)=4^{F}\prod_{i=1}^{n-1}\prod_{j=1}^{k-1}\Bigl(1-\cos\frac{i\pi}{n}\cos\frac{j\pi}{k}\Bigr)^{1/2}.
-$$
+```
 
 Pairing i with n−i and j with k−j turns the product into the one in the theorem. ∎
 
