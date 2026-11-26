@@ -1,14 +1,18 @@
-"""Exact checks for the closed form of OEIS A400778 (single-loop mirror curves).
+"""Exact checks for the mirror-curve theorems (OEIS A400778 and general cell regions).
 
-Standard Python 3 only.  Run: python3 verify.py [b400778.txt]
+Standard Python 3 only.  Run:  python3 verify.py [b400778.txt]
+A region is a finite set of unit cells (r, c); r grows downwards.
 """
+import random
 import sys
-from fractions import Fraction
 from itertools import product
+from math import cos, isclose, pi
+
+DIRS = ((0, 1), (-1, 0), (0, -1), (1, 0))            # sides E, N, W, S of a cell
 
 
 def det(m):
-    """Exact determinant by fraction-free (Bareiss) elimination."""
+    """Exact integer determinant by fraction-free (Bareiss) elimination."""
     m = [row[:] for row in m]
     n, sign, prev = len(m), 1, 1
     for c in range(n):
@@ -24,54 +28,17 @@ def det(m):
     return sign * prev if n else 1
 
 
-def face_det(n, k):
-    """det of the (n-1)(k-1) face matrix M: 4 on the diagonal, -2 towards the
-    vertical neighbours of even faces and the horizontal neighbours of odd faces."""
-    faces = [(a, b) for a in range(n - 1) for b in range(k - 1)]
-    idx = {f: i for i, f in enumerate(faces)}
-    m = [[0] * len(faces) for _ in faces]
-    for (a, b), i in idx.items():
-        m[i][i] = 4
-        step = [(0, 1), (0, -1)] if (a + b) % 2 == 0 else [(1, 0), (-1, 0)]
-        for da, db in step:
-            j = idx.get((a + da, b + db))
-            if j is not None:
-                m[i][j] = -2
-    return det(m)
+def edges_of(cells):
+    hor = [((r, c), (r, c + 1)) for r, c in sorted(cells) if (r, c + 1) in cells]     # pointing east
+    ver = [((r + 1, c), (r, c)) for r, c in sorted(cells) if (r + 1, c) in cells]     # pointing north
+    return hor, ver
 
 
-def closed_form(n, k):
-    """2^(F + even - odd) * det(4I - A_d) on the odd faces, A_d = diagonal adjacency.
+# ---------------------------------------------------------------- the definition
+def loops(cells, mirrors):
+    """Number of closed paths of the mirror curve, by following the rays.
 
-    This is the exact integer form of
-    4^F * prod_{i<n/2, j<k/2} (1 - cos^2(i pi/n) cos^2(j pi/k)),  F = (n-1)(k-1)."""
-    odd = [(a, b) for a in range(n - 1) for b in range(k - 1) if (a + b) % 2]
-    even = (n - 1) * (k - 1) - len(odd)
-    idx = {f: i for i, f in enumerate(odd)}
-    m = [[0] * len(odd) for _ in odd]
-    for (a, b), i in idx.items():
-        m[i][i] = 4
-        for da, db in product((1, -1), repeat=2):
-            j = idx.get((a + da, b + db))
-            if j is not None:
-                m[i][j] = -1
-    return 2 ** ((n - 1) * (k - 1) + even - len(odd)) * det(m)
-
-
-def trace_loops(n, k, mirrors):
-    """Number of closed paths of the mirror curve, straight from the definition.
-
-    Squares are (r, c).  A ray state is (square, side it is heading to, turn),
-    sides 0..3 = E, N, W, S; inside a square the ray goes from the midpoint of
-    one side to the midpoint of a neighbouring side."""
-    def blocked(r, c, side):
-        dr, dc = ((0, 1), (-1, 0), (0, -1), (1, 0))[side]
-        r2, c2 = r + dr, c + dc
-        if not (0 <= r2 < n and 0 <= c2 < k):
-            return True
-        return frozenset(((r, c), (r2, c2))) in mirrors
-
-    # Undirected segments: (square, i) joins side i and side i+1 of the square.
+    Segment (cell, i) joins the midpoints of sides i and i+1 of the cell."""
     parent = {}
 
     def find(x):
@@ -80,118 +47,214 @@ def trace_loops(n, k, mirrors):
             x = parent[x]
         return x
 
-    for r in range(n):
-        for c in range(k):
-            for side in range(4):
-                a = (r, c, (side - 1) % 4)      # segment ending at `side`
-                b = (r, c, side)                # segment starting at `side`
-                if blocked(r, c, side):
-                    parent[find(a)] = find(b)   # reflect: stay in the square
-                else:                           # pass straight through
-                    dr, dc = ((0, 1), (-1, 0), (0, -1), (1, 0))[side]
-                    opp = (side + 2) % 4
-                    # going straight on, the ray enters the next square through
-                    # its side `opp` along the segment joining opp-1 and opp
-                    parent[find(a)] = find((r + dr, c + dc, (opp - 1) % 4))
-                    parent[find(b)] = find((r + dr, c + dc, opp))
+    for r, c in cells:
+        for side, (dr, dc) in enumerate(DIRS):
+            a, b = (r, c, (side - 1) % 4), (r, c, side)
+            other = (r + dr, c + dc)
+            if other not in cells or frozenset(((r, c), other)) in mirrors:
+                parent[find(a)] = find(b)                       # reflect, stay in the cell
+            else:                                               # go straight on
+                opp = (side + 2) % 4
+                parent[find(a)] = find(other + ((opp - 1) % 4,))
+                parent[find(b)] = find(other + (opp,))
     return len({find(x) for x in list(parent)})
 
 
-def brute(n, k):
-    edges = [frozenset(((r, c), (r, c + 1))) for r in range(n) for c in range(k - 1)]
-    edges += [frozenset(((r, c), (r + 1, c))) for r in range(n - 1) for c in range(k)]
-    total = 0
-    for mask in range(1 << len(edges)):
-        mirrors = {e for i, e in enumerate(edges) if mask >> i & 1}
-        total += trace_loops(n, k, mirrors) == 1
-    return total
+def brute(cells):
+    hor, ver = edges_of(cells)
+    edges = [frozenset(e) for e in hor + ver]
+    return sum(loops(cells, {e for i, e in enumerate(edges) if mask >> i & 1}) == 1
+               for mask in range(1 << len(edges)))
 
 
-def grid(n, k):
-    """Vertices, edges (tail, head) and the matrices 4*Omega and D of the proof.
+# ---------------------------------------------------------------- Theorem 1
+def tours(cells):
+    """Rooted cofactor of the out-Laplacian of the ray digraph (BEST theorem)."""
+    arcs = []
+    for r, c in cells:
+        ports = [(2 * r + dr, 2 * c + dc) for dr, dc in DIRS]   # E, N, W, S: counterclockwise
+        if (r + c) % 2 == 0:
+            ports.reverse()
+        arcs += zip(ports, ports[1:] + ports[:1])
+    idx = {v: i for i, v in enumerate(sorted({v for a in arcs for v in a})[1:])}
+    lap = [[0] * len(idx) for _ in idx]
+    for a, b in arcs:
+        if a in idx:
+            lap[idx[a]][idx[a]] += 1
+            if b in idx:
+                lap[idx[a]][idx[b]] -= 1
+    return det(lap)
 
-    Horizontal edges point east, vertical edges point north (towards row r-1)."""
-    verts = [(r, c) for r in range(n) for c in range(k)]
-    hor = [((r, c), (r, c + 1)) for r in range(n) for c in range(k - 1)]
-    ver = [((r + 1, c), (r, c)) for r in range(n - 1) for c in range(k)]
+
+def bordered(cells):
+    """det [[I + Omega, D^T], [-D, 0]], computed as an integer determinant with 4I + 4 Omega."""
+    hor, ver = edges_of(cells)
     edges = hor + ver
-    om = [[0] * len(edges) for _ in edges]
+    m = len(edges)
+    verts = sorted(cells)[1:]
+    top = [[4 * (i == j) for j in range(m)] for i in range(m)]
     for i, h in enumerate(hor):
         for j, v in enumerate(ver, len(hor)):
             for u in set(h) & set(v):
-                om[i][j] = (-1) ** sum(u)       # 4 * Omega(h, v) = eps_u
-                om[j][i] = -om[i][j]
-    inc = [[(v == e[1]) - (v == e[0]) for e in edges] for v in verts[1:]]
-    return edges, om, inc
+                top[i][j] = (-1) ** sum(u)
+                top[j][i] = -top[i][j]
+    inc = [[(v == e[1]) - (v == e[0]) for e in edges] for v in verts]
+    mat = [top[i] + [row[i] for row in inc] for i in range(m)]
+    mat += [[-x for x in row] + [0] * len(verts) for row in inc]
+    value, scale = det(mat), 4 ** (m - len(verts))
+    assert value % scale == 0
+    return value // scale
 
 
-def bordered(om, inc, keep, diag=0):
-    """det [[4*Omega_S + diag*I, D_S^T], [-D_S, 0]] for the edge subset `keep`."""
-    top = [[om[i][j] + diag * (i == j) for j in keep] + [row[i] for row in inc] for i in keep]
-    bottom = [[-row[j] for j in keep] + [0] * len(inc) for row in inc]
-    return det(top + bottom)
+# ---------------------------------------------------------------- Theorems 2 and 3
+def interior_points(cells):
+    """Lattice points whose four surrounding cells all belong to the region."""
+    return sorted({(r, c) for r, c in cells
+                   if {(r - 1, c - 1), (r - 1, c), (r, c - 1)} <= cells})
 
 
-def check_lemma(n, k, subsets):
-    """Single loop  <=>  the bordered determinant equals 4^(|S|-|V|+1), else it is 0."""
-    edges, om, inc = grid(n, k)
-    for keep in subsets:
-        mirrors = {frozenset(edges[i]) for i in range(len(edges)) if i not in keep}
-        single = trace_loops(n, k, mirrors) == 1
-        want = 4 ** (len(keep) - len(inc)) if single else 0
-        assert bordered(om, inc, keep) == want, (n, k, keep)
+def full(cells):
+    """True if the cells outside the region are connected by king moves (no holes)."""
+    rs, cs = [r for r, _ in cells], [c for _, c in cells]
+    box = {(r, c) for r in range(min(rs) - 1, max(rs) + 2) for c in range(min(cs) - 1, max(cs) + 2)} - cells
+    todo, seen = [min(box)], {min(box)}
+    while todo:
+        r, c = todo.pop()
+        for dr, dc in product((-1, 0, 1), repeat=2):
+            q = (r + dr, c + dc)
+            if q in box and q not in seen:
+                seen.add(q)
+                todo.append(q)
+    return seen == box
+
+
+def stencil(cells):
+    """det(4I - 2B): an even point is joined to its horizontal neighbours, an odd one to its vertical ones."""
+    pts = interior_points(cells)
+    idx = {p: i for i, p in enumerate(pts)}
+    m = [[0] * len(pts) for _ in pts]
+    for (r, c), i in idx.items():
+        m[i][i] = 4
+        for q in ([(r, c - 1), (r, c + 1)] if (r + c) % 2 == 0 else [(r - 1, c), (r + 1, c)]):
+            if q in idx:
+                m[i][idx[q]] = -2
+    return det(m)
+
+
+def forest_form(cells):
+    """2^(|P| + even - odd) * det(4I - N) on the odd points, plus the digraph behind N.
+
+    N[p][q] counts the two-step moves p -> q (one vertical step, then one horizontal step) inside P."""
+    pts = set(interior_points(cells))
+    odd = sorted(p for p in pts if sum(p) % 2)
+    idx = {p: i for i, p in enumerate(odd)}
+    m = [[4 * (i == j) for j in range(len(odd))] for i in range(len(odd))]
+    arcs = {p: [] for p in odd}
+    for (r, c), i in idx.items():
+        for dr, dc in product((-1, 1), repeat=2):
+            if (r + dr, c) in pts and (r + dr, c + dc) in pts:
+                m[i][idx[(r + dr, c + dc)]] -= 1
+                arcs[(r, c)].append((r + dr, c + dc))
+    acyclic, left = True, dict(arcs)
+    while left:                                               # peel off points without outgoing arcs
+        sinks = [p for p, out in left.items() if not any(q in left for q in out)]
+        if not sinks:
+            acyclic = False
+            break
+        for p in sinks:
+            del left[p]
+    return 2 ** (len(pts) + (len(pts) - len(odd)) - len(odd)) * det(m), acyclic, len(pts)
+
+
+def product_formula(n, k):
+    p = 4.0 ** ((n - 1) * (k - 1))
+    for i in range(1, (n + 1) // 2):
+        for j in range(1, (k + 1) // 2):
+            p *= 1 - cos(i * pi / n) ** 2 * cos(j * pi / k) ** 2
+    return p
+
+
+def rectangle(n, k):
+    return {(r, c) for r in range(n) for c in range(k)}
+
+
+def random_region(rng, height, width, size):
+    cells = {(rng.randrange(height), rng.randrange(width))}
+    while len(cells) < size:
+        r, c = rng.choice(sorted(cells))
+        dr, dc = rng.choice(DIRS)
+        if 0 <= r + dr < height and 0 <= c + dc < width:
+            cells.add((r + dr, c + dc))
+    return cells
 
 
 if __name__ == '__main__':
-    import random
-    random.seed(1)
-    # 0. the determinant criterion of the proof, against the definition
-    for n, k in [(2, 2), (2, 3), (2, 4), (3, 3)]:
-        m = len(grid(n, k)[0])
-        check_lemma(n, k, ([i for i in range(m) if mask >> i & 1] for mask in range(1 << m)))
-        print('determinant criterion, all edge subsets', n, k)
-    for n, k in [(3, 4), (4, 4), (3, 6), (5, 5)]:
-        m = len(grid(n, k)[0])
-        # bias towards few mirrors, where single loops actually occur
-        check_lemma(n, k, ([i for i in range(m) if random.random() < p] for p in (0.6, 0.75, 0.9) for _ in range(150)))
-        print('determinant criterion, 450 random edge subsets', n, k)
-    for n, k in [(2, 2), (3, 3), (3, 4), (4, 4), (4, 5)]:
-        edges, om, inc = grid(n, k)
-        assert bordered(om, inc, list(range(len(edges))), diag=4) == 4 ** (len(edges) - len(inc)) * face_det(n, k)
-    print('summed determinant equals the face determinant')
-    # 1. brute force from the definition on small grids
-    for n, k in [(1, 4), (2, 2), (2, 3), (2, 4), (3, 3), (2, 5), (3, 4)]:
-        b, f = brute(n, k), face_det(n, k)
-        assert b == f == closed_form(n, k), (n, k, b, f, closed_form(n, k))
-        print('brute force', n, k, b)
-    # 2. the published table (antidiagonals), if given
-    if len(sys.argv) > 1:
-        terms = [int(line.split()[1]) for line in open(sys.argv[1]) if line.strip() and line[0] != '#']
-        pos = 0
-        d = 1
-        while pos < len(terms):
-            for n in range(1, d + 1):
-                k = d + 1 - n
-                assert terms[pos] == face_det(n, k) == closed_form(n, k), (n, k)
-                pos += 1
-            d += 1
-        print('all', pos, 'published terms agree (antidiagonals 1..%d)' % (d - 1))
-    # 3. the product formula in floating point, and the statements in the OEIS entry
-    from math import cos, pi, isclose
+    rng = random.Random(2026)
+
+    # A. Theorem 1 against the definition: every mirror placement of small regions is traced
+    count = holes = 0
+    while count < 150:
+        cells = random_region(rng, 4, 5, rng.randrange(1, 13))
+        if sum(map(len, edges_of(cells))) > 13:
+            continue
+        t = brute(cells)
+        assert t == tours(cells) == bordered(cells), sorted(cells)
+        count += 1
+        holes += not full(cells)
+    ring = rectangle(3, 3) - {(1, 1)}
+    assert brute(ring) == tours(ring) == bordered(ring) == 8
+    print(f'A. definition = Euler-tour cofactor = bordered determinant on {count} random regions '
+          f'({holes} with holes) and the 8-cell ring')
+
+    # B. Theorems 1 and 2 on larger regions (no enumeration)
+    count = holes = 0
+    for _ in range(400):
+        cells = random_region(rng, 7, 7, rng.randrange(8, 40))
+        t = tours(cells)
+        assert t == bordered(cells)
+        if full(cells):
+            value, acyclic, npts = forest_form(cells)
+            assert t == stencil(cells) == value
+            assert t <= 4 ** npts and (t == 4 ** npts) == acyclic
+            count += 1
+        else:
+            holes += 1
+    print(f'B. cofactor = bordered determinant on 400 larger regions; point stencil, forest form and '
+          f'the bound 4^|P| on the {count} without holes ({holes} have holes)')
+
+    # C. Unicyclic regions: the count is the length of the cycle
+    for h, w in [(3, 3), (3, 4), (4, 4), (3, 6), (5, 4)]:
+        frame = rectangle(h, w) - {(r, c) for r in range(1, h - 1) for c in range(1, w - 1)}
+        tail = frame | {(h, 0), (h + 1, 0)}
+        assert tours(frame) == tours(tail) == 2 * (h + w) - 4
+    print('C. frames with and without a tail: the count equals the cycle length')
+
+    # D. Rectangles: stencil, product formula, bound, and the statements in the OEIS entry
+    table = {}
     for n in range(1, 10):
         for k in range(1, 10):
-            p = 4.0 ** ((n - 1) * (k - 1))
-            for i in range(1, (n + 1) // 2):
-                for j in range(1, (k + 1) // 2):
-                    p *= 1 - cos(i * pi / n) ** 2 * cos(j * pi / k) ** 2
-            t = closed_form(n, k)
-            assert isclose(p, t, rel_tol=1e-9), (n, k)
-            assert (t == 4 ** ((n - 1) * (k - 1))) == (min(n, k) <= 2) and t <= 4 ** ((n - 1) * (k - 1))
+            t = table[n, k] = stencil(rectangle(n, k))
+            assert isclose(product_formula(n, k), t, rel_tol=1e-9)
+            assert t <= 4 ** ((n - 1) * (k - 1)) and (t == 4 ** ((n - 1) * (k - 1))) == (min(n, k) <= 2)
+            if n * k <= 30:
+                assert t == tours(rectangle(n, k)) == bordered(rectangle(n, k))
+    for n, k in [(1, 4), (2, 2), (2, 3), (2, 4), (3, 3), (2, 5), (3, 4)]:
+        assert brute(rectangle(n, k)) == table[n, k]
     rec = {2: [4], 3: [16, -16], 4: [64, -512], 5: [256, -11776, 65536, -65536],
            6: [1024, -237568, 12582912, -150994944]}
     for n, coef in rec.items():
-        row = [0] + [closed_form(n, k) for k in range(1, 15)]       # T(n,0) = 0
-        start = 2 if n == 2 else len(coef)
-        for k in range(start, 15):
+        row = [0] + [stencil(rectangle(n, k)) for k in range(1, 15)]
+        for k in range(2 if n == 2 else len(coef), 15):
             assert row[k] == sum(c * row[k - 1 - d] for d, c in enumerate(coef)), (n, k)
-    print('product formula, inequality and the five row recurrences hold')
+    print('D. rectangles up to 9 x 9: product formula, bound, brute force on seven grids, five row recurrences')
+
+    # E. the published table, if given
+    if len(sys.argv) > 1:
+        terms = [int(line.split()[1]) for line in open(sys.argv[1]) if line.strip() and line[0] != '#']
+        pos, d = 0, 1
+        while pos < len(terms):
+            for n in range(1, d + 1):
+                assert terms[pos] == stencil(rectangle(n, d + 1 - n)), (n, d + 1 - n)
+                pos += 1
+            d += 1
+        print(f'E. all {pos} published terms agree (antidiagonals 1..{d - 1})')
