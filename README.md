@@ -5,7 +5,7 @@ Put a dot in the centre of every square of an n-by-k rectangle. Each side shared
 **Theorem.** For all n, k ≥ 1,
 
 ```math
-T(n,k)=4^{(n-1)(k-1)}\prod_{1\le i<n/2}\ \prod_{1\le j<k/2}\Bigl(1-\cos^2\frac{i\pi}{n}\,\cos^2\frac{j\pi}{k}\Bigr).
+T(n,k)=4^{(n-1)(k-1)}\prod_{1\le i\lt n/2}\ \prod_{1\le j\lt k/2}\Bigl(1-\cos^2\frac{i\pi}{n}\,\cos^2\frac{j\pi}{k}\Bigr).
 ```
 
 The entry lists six conjectures, checked there for k ≤ 22 or n + k ≤ 17. All six follow.
@@ -15,7 +15,7 @@ The entry lists six conjectures, checked there for k ≤ 22 or n + k ≤ 17. All
 **Corollary 2.** Fix n and write $s_i=\sin(i\pi/n)$. Then
 
 ```math
-T(n,k)=4^{(k-1)[n\ \mathrm{even}]}\prod_{1\le i<n/2}u_i(k),\qquad
+T(n,k)=4^{(k-1)[n\ \mathrm{even}]}\prod_{1\le i\lt n/2}u_i(k),\qquad
 u_i(k)=\frac{(8+8s_i)^k-(8-8s_i)^k}{16\,s_i}.
 ```
 
